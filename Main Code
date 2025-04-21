@@ -1,0 +1,148 @@
+// PROJECT  :RPNCalculator
+// PURPOSE  :To create a calculator that performs calculation following Reversed Polish Notation
+// COURSE   :ICS3U-E2
+// AUTHOR   :William Xie
+// DATE     :2025 04 19
+// MCU      :328p (Nano)
+// STATUS   :Not Working
+// REFERENCE:http://darcy.rsgc.on.ca/ACES/TEI3M/Tasks.html#RPN
+
+#include <LiquidCrystal.h>
+#include "Stack.h"
+
+// LCD pin configuration
+uint8_t RS = 9, EN = 8, D4 = 7, D5 = 6, D6 = 5, D7 = 4;
+LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
+
+// Keypad configuration
+uint16_t maxThresholds[] = { 55, 58, 62, 66, 75, 81, 88, 97, 116, 132, 152, 178, 255, 340, 511, 1023 };  // adc values
+char keys[] = { '+', 'E', '.', '0', '-', '3', '2', '1', '*', '6', '5', '4', '/', '9', '8', '7' };        // corresponding keys
+
+Stack stack;            // Instance of the Stack Class
+char operand[16] = "";  // String of the current operand
+
+void setup() {
+  lcd.begin(16, 2);  // Initialize the LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("RPN Calculator");
+  delay(2000);  // Display splash for 2 seconds
+  lcd.clear();
+}
+
+boolean isDigit(char ch) {
+  return (ch >= '0' && ch <= '9');
+}
+
+boolean isOperator(char ch) {
+  return (ch == '+' || ch == '-' || ch == '*' || ch == '/');
+}
+
+char getKey() {
+  uint16_t adc = 0;
+  while (adc == 0) {
+    adc = analogRead(A5);  // Read the analog value from the keypad
+  }
+  delay(500);
+  uint8_t index = 0;
+  while (adc > maxThresholds[index]) {  // Determine which key was pressed based on ADC value
+    index++;
+  }
+  return keys[index];
+}
+
+void process(char ch) {
+  if (isDigit(ch) || ch == '.') {  // If the key is a digit or decimal point
+    append(ch);                    // Append it to the current operand
+    displayEntry();
+  } else if (ch == 'E') {  // If the key is Enter
+    if (strlen(operand) > 0) {
+      stack.push(atof(operand));  // Push the operand onto the stack
+      operand[0] = '\0';          // Clear the operand
+      lcd.clear();                // Clear the LCD for the next entry
+    }
+  } else if (isOperator(ch)) {  // If the key is an operator
+    if (!stack.isEmpty()) {
+      float operand2 = stack.pop();  // Get the second operand
+      if (!stack.isEmpty()) {
+        float operand1 = stack.pop();                     // Get the first operand
+        float result = evaluate(ch, operand1, operand2);  // Perform the operation
+        if (!isnan(result)) {                             // Check if the result is valid
+          stack.push(result);                             // Push the result back onto the stack
+          displayEvaluate(result);                        // Display the result
+        }
+      } else {
+        stack.push(operand2);  // Push back the second operand if the stack was empty
+        lcd.clear();
+        lcd.print("Error: Only 1 Operand");
+        delay(2000);
+        lcd.clear();
+      }
+    } else {
+      lcd.clear();
+      lcd.print("Error: Stack Empty");
+      delay(2000);
+      lcd.clear();
+    }
+  }
+}
+
+float evaluate(char op, float operand1, float operand2) {
+  switch (op) {
+    case '+':
+      return operand1 + operand2;
+    case '-':
+      return operand1 - operand2;
+    case '*':
+      return operand1 * operand2;
+    case '/':
+      if (operand2 == 0) {
+        lcd.clear();
+        lcd.print("Error: Divided by 0");
+        delay(2000);
+        lcd.clear();
+        return NAN;  // Return NAN for division by zero
+      } else {
+        return operand1 / operand2;
+      }
+    
+    
+    
+    
+    
+    
+  Ldefault:
+      return NAN;  // Unknown operator
+  }
+}
+
+void append(char ch) {
+  uint8_t len = strlen(operand);
+  if (len < sizeof(operand) - 1) {  // Ensure there is space in the buffer
+    operand[len] = ch;
+    operand[len + 1] = '\0';  // Null-terminate the string
+  }
+}
+
+void displayEntry() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(operand);  // Display the current operand
+}
+
+void displayEvaluate(float result) {
+  lcd.clear();
+  lcd.setCursor(0, 1);
+
+  // Format the result with 4 decimal places
+  //char buffer[16];
+  //dtostrf(result, 0, 4, buffer);  // Convert float to string with 4 decimal places
+  lcd.print(result, 4);              // Display the result
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  char ch = getKey();  // Get the key entered
+  process(ch);         // Process the key
+}
